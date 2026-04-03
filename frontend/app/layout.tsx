@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { AuthProvider } from "@/components/AuthProvider";
 import { CartProvider } from "@/components/CartProvider";
@@ -24,7 +25,9 @@ export default function RootLayout({
         <AuthProvider>
           <WishlistProvider>
             <CartProvider>
-              <MetrikaLoader />
+              <Suspense fallback={null}>
+                <MetrikaLoader />
+              </Suspense>
               <div className="page-shell">
                 <SiteHeader />
                 {children}

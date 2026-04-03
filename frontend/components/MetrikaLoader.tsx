@@ -2,8 +2,10 @@
 
 import Script from "next/script";
 import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { getSiteSettings } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 
 declare global {
   interface Window {
@@ -16,6 +18,8 @@ declare global {
 
 export function MetrikaLoader() {
   const [counterId, setCounterId] = useState<string>("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     getSiteSettings()
@@ -30,6 +34,26 @@ export function MetrikaLoader() {
         setCounterId("");
       });
   }, []);
+
+  useEffect(() => {
+    if (!counterId || typeof window === "undefined") {
+      return;
+    }
+
+    const query = searchParams.toString();
+    const url = query ? `${pathname}?${query}` : pathname;
+
+    if (typeof window.ym === "function" && typeof window.__yaCounterId === "number") {
+      try {
+        window.ym(window.__yaCounterId, "hit", url, {
+          title: document.title,
+          referer: document.referrer,
+        });
+      } catch {}
+    }
+
+    void trackEvent("page_view", { title: document.title, url });
+  }, [counterId, pathname, searchParams]);
 
   if (!counterId) {
     return null;

@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\User\Downloads\woodapp_v2_full\backend\.venv
+set VIRTUAL_ENV=D:\УЧЕБА\project\ProjectWoodApp\backend\.venv
 
 if not defined PROMPT set PROMPT=$P$G
 

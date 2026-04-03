@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +16,6 @@ class AnalyticsEventRead(BaseModel):
     event_type: str
     page_url: str | None = None
     payload_json: str | None = None
-    created_at: str | None = None
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}

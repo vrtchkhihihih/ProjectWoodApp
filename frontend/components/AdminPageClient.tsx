@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -91,6 +91,19 @@ function getBitrixUrl(webhookUrl?: string | null) {
   }
 }
 
+function formatAnalyticsEventLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    page_view: "Просмотр страницы",
+    add_to_cart: "Добавление в корзину",
+    add_to_wishlist: "Добавление в избранное",
+    remove_from_wishlist: "Удаление из избранного",
+    order_created: "Оформление заказа",
+    contact_request_sent: "Отправка заявки",
+  };
+
+  return labels[eventType] ?? eventType;
+}
+
 export function AdminPageClient() {
   const { user, hydrated } = useAuth();
 
@@ -105,36 +118,79 @@ export function AdminPageClient() {
   const [productForm, setProductForm] = useState<ProductFormState>(emptyProductForm);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   async function loadData() {
-    try {
-      const [usersData, ordersData, contactsData, collectionsData, settingsData, analyticsData, crmData] = await Promise.all([
-        listUsers(),
-        listOrders(),
-        listContactRequests(),
-        getCollections(),
-        getSiteSettings(),
-        listAnalyticsEvents(),
-        listCrmSyncLog(),
-      ]);
+    setLoading(true);
 
-      setUsers(usersData);
-      setOrders(ordersData);
-      setContactRequests(contactsData);
-      setCollections(collectionsData);
-      setSettings(settingsData);
-      setAnalyticsEvents(analyticsData);
-      setCrmLog(crmData);
+    const results = await Promise.allSettled([
+      listUsers(),
+      listOrders(),
+      listContactRequests(),
+      getCollections(),
+      getSiteSettings(),
+      listAnalyticsEvents(),
+      listCrmSyncLog(),
+    ]);
 
-      if (!editingProductId && collectionsData[0]) {
+    const [usersResult, ordersResult, contactsResult, collectionsResult, settingsResult, analyticsResult, crmResult] = results;
+    const failedModules: string[] = [];
+
+    if (usersResult.status === "fulfilled") {
+      setUsers(usersResult.value);
+    } else {
+      failedModules.push("пользователи");
+    }
+
+    if (ordersResult.status === "fulfilled") {
+      setOrders(ordersResult.value);
+    } else {
+      failedModules.push("заказы");
+    }
+
+    if (contactsResult.status === "fulfilled") {
+      setContactRequests(contactsResult.value);
+    } else {
+      failedModules.push("обращения");
+    }
+
+    if (collectionsResult.status === "fulfilled") {
+      setCollections(collectionsResult.value);
+      if (!editingProductId && collectionsResult.value[0]) {
         setProductForm((current) => ({
           ...current,
-          collection_id: current.collection_id || collectionsData[0].id,
+          collection_id: current.collection_id || collectionsResult.value[0].id,
         }));
       }
-    } catch {
-      setFeedback("Не удалось загрузить данные админ-панели. Проверьте backend.");
+    } else {
+      failedModules.push("каталог");
     }
+
+    if (settingsResult.status === "fulfilled") {
+      setSettings(settingsResult.value);
+    } else {
+      failedModules.push("настройки сайта");
+    }
+
+    if (analyticsResult.status === "fulfilled") {
+      setAnalyticsEvents(analyticsResult.value);
+    } else {
+      failedModules.push("метрика");
+    }
+
+    if (crmResult.status === "fulfilled") {
+      setCrmLog(crmResult.value);
+    } else {
+      failedModules.push("Bitrix24");
+    }
+
+    setFeedback(
+      failedModules.length > 0
+        ? `Часть данных не загрузилась: ${failedModules.join(", ")}. Проверьте backend и доступность API.`
+        : null,
+    );
+
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -148,6 +204,17 @@ export function AdminPageClient() {
   const metrikaEventCount = analyticsEvents.length;
   const metrikaUrl = getMetrikaUrl(settings?.metrika_counter_id);
   const bitrixUrl = getBitrixUrl(settings?.bitrix_webhook_url);
+  const pageViewCount = useMemo(
+    () => analyticsEvents.filter((event) => event.event_type === "page_view").length,
+    [analyticsEvents],
+  );
+  const goalEventCount = useMemo(
+    () =>
+      analyticsEvents.filter((event) =>
+        ["add_to_cart", "add_to_wishlist", "order_created", "contact_request_sent"].includes(event.event_type),
+      ).length,
+    [analyticsEvents],
+  );
   const topMetrikaEvents = useMemo(() => {
     const grouped = new Map<string, number>();
     analyticsEvents.forEach((event) => {
@@ -159,7 +226,7 @@ export function AdminPageClient() {
       .slice(0, 4);
   }, [analyticsEvents]);
 
-  if (!hydrated) {
+  if (!hydrated || loading) {
     return <section className="detail-panel">Загрузка админ-панели...</section>;
   }
 
@@ -478,6 +545,29 @@ export function AdminPageClient() {
               </article>
             </div>
 
+            <div className="admin-kpi-grid admin-kpi-grid-compact admin-integration-kpis">
+              <article className="detail-panel admin-kpi-card">
+                <span>Просмотры страниц</span>
+                <strong>{pageViewCount}</strong>
+                <p>События типа `page_view`</p>
+              </article>
+              <article className="detail-panel admin-kpi-card">
+                <span>Целевые действия</span>
+                <strong>{goalEventCount}</strong>
+                <p>Корзина, избранное, заявки и заказы</p>
+              </article>
+              <article className="detail-panel admin-kpi-card">
+                <span>Заявки с сайта</span>
+                <strong>{contactRequests.length}</strong>
+                <p>Через форму контактов</p>
+              </article>
+              <article className="detail-panel admin-kpi-card">
+                <span>Заказы с сайта</span>
+                <strong>{orders.length}</strong>
+                <p>Через корзину</p>
+              </article>
+            </div>
+
             <div className="admin-settings-grid admin-integration-settings">
               <input
                 className="order-input admin-span-2"
@@ -504,7 +594,7 @@ export function AdminPageClient() {
               {topMetrikaEvents.map(([eventName, count]) => (
                 <div key={eventName} className="admin-table-row">
                   <div>
-                    <strong>{eventName}</strong>
+                    <strong>{formatAnalyticsEventLabel(eventName)}</strong>
                     <span>Цель / событие</span>
                   </div>
                   <div>
@@ -636,7 +726,7 @@ export function AdminPageClient() {
       ) : null}
 
       <div className="actions">
-        <button type="button" className="btn btn-primary" onClick={() => void handleSaveSettings()}>
+        <button type="button" className="btn btn-primary" onClick={() => void handleSaveSettings()} disabled={!settings}>
           Сохранить настройки
         </button>
       </div>

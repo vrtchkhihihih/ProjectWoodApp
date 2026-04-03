@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\User\Downloads\woodapp_v2_full\backend\.venv"
+VIRTUAL_ENV="D:\УЧЕБА\project\ProjectWoodApp\backend\.venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useCart } from "@/components/CartProvider";
 import { useWishlist } from "@/components/WishlistProvider";
+import { trackEvent } from "@/lib/analytics";
 import { assetUrl } from "@/lib/assets";
 import { getColorSwatch } from "@/lib/colorSwatches";
 import { getProductImageOverride } from "@/lib/productImageOverrides";
@@ -157,7 +158,7 @@ function buildWishlistPayload(collection: CollectionCard, color: ProductColor) {
 }
 
 function addColorToCart(addItem: ReturnType<typeof useCart>["addItem"], collection: CollectionCard, color: ProductColor) {
-  addItem({
+  return addItem({
     collectionId: collection.id,
     productId: color.id,
     name: `${collection.name} · ${color.name}`,
@@ -258,6 +259,16 @@ export function CollectionDetailClient({ collection, initialColorId }: Props) {
     }
 
     const result = await addColorToCart(addItem, collection, color);
+    if (result?.ok) {
+      await trackEvent("add_to_cart", {
+        collection_id: collection.id,
+        collection_name: collection.name,
+        product_id: color.id,
+        product_name: color.name,
+        felt: color.felt ?? null,
+        art: color.art ?? null,
+      });
+    }
     setFeedback("Позиция добавлена в корзину.");
   }
 
@@ -267,8 +278,17 @@ export function CollectionDetailClient({ collection, initialColorId }: Props) {
       return;
     }
 
+    const wasInWishlist = isInWishlist(color.id);
     await toggleItem(buildWishlistPayload(collection, color));
-    setFeedback(isInWishlist(color.id) ? "Позиция удалена из избранного." : "Позиция добавлена в избранное.");
+    await trackEvent(wasInWishlist ? "remove_from_wishlist" : "add_to_wishlist", {
+      collection_id: collection.id,
+      collection_name: collection.name,
+      product_id: color.id,
+      product_name: color.name,
+      felt: color.felt ?? null,
+      art: color.art ?? null,
+    });
+    setFeedback(wasInWishlist ? "Позиция удалена из избранного." : "Позиция добавлена в избранное.");
   }
 
   if (isPanelCollection(collection.id)) {
